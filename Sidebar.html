@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #1a73e8;
+      --bg: #ffffff;
+      --text: #3c4043;
+      --border: #dadce0;
+      --chat-bg: #f8f9fa;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      margin: 0;
+      padding: 16px;
+      color: var(--text);
+      background-color: var(--bg);
+      display: flex;
+      flex-direction: column;
+      height: 95vh;
+    }
+
+    .header {
+      margin-bottom: 20px;
+    }
+
+    .header h2 {
+      font-size: 18px;
+      margin: 0;
+      color: var(--primary);
+    }
+
+    .header p {
+      font-size: 12px;
+      color: #70757a;
+      margin: 4px 0 0 0;
+    }
+
+    #response-container {
+      flex-grow: 1;
+      overflow-y: auto;
+      margin-bottom: 16px;
+      padding: 12px;
+      background: var(--chat-bg);
+      border-radius: 8px;
+      font-size: 13px;
+      line-height: 1.5;
+      border: 1px solid var(--border);
+    }
+
+    .input-wrapper {
+      position: relative;
+    }
+
+    textarea {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      resize: none;
+      font-family: inherit;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+      min-height: 80px;
+    }
+
+    textarea:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.1);
+    }
+
+    .btn-send {
+      margin-top: 10px;
+      width: 100%;
+      padding: 10px;
+      background-color: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background 0.2s;
+    }
+
+    .btn-send:hover {
+      background-color: #1765cc;
+    }
+
+    .btn-send:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+
+    .loader {
+      display: none;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #ffffff;
+      border-top: 2px solid transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .message {
+      margin-bottom: 10px;
+      padding: 8px;
+      border-radius: 4px;
+    }
+
+    .user-msg { border-left: 3px solid var(--primary); background: #e8f0fe; }
+    .ai-msg { border-left: 3px solid #34a853; background: #e6f4ea; }
+    .error-msg { border-left: 3px solid #d93025; background: #fce8e6; }
+
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <h2>AI Sheet Agent</h2>
+    <p>Ask anything about your data</p>
+  </div>
+
+  <div id="response-container">
+    <div class="message ai-msg">Hello! I'm ready to analyze your sheet. What would you like to know?</div>
+  </div>
+
+  <div class="input-wrapper">
+    <textarea id="prompt" placeholder="Ex: Clean the missing values in Column B..."></textarea>
+    <button id="send-btn" class="btn-send" onclick="sendPrompt()">
+      <span id="btn-text">Send Query</span>
+      <div id="loader" class="loader"></div>
+    </button>
+  </div>
+
+  <script>
+    function sendPrompt() {
+      const promptInput = document.getElementById('prompt');
+      const btn = document.getElementById('send-btn');
+      const loader = document.getElementById('loader');
+      const btnText = document.getElementById('btn-text');
+      const container = document.getElementById('response-container');
+
+      const prompt = promptInput.value.trim();
+      if (!prompt) return;
+
+      // Update UI to Loading State
+      btn.disabled = true;
+      loader.style.display = 'block';
+      btnText.style.opacity = '0.5';
+      
+      // Append User Message
+      const userDiv = document.createElement('div');
+      userDiv.className = 'message user-msg';
+      userDiv.textContent = prompt;
+      container.appendChild(userDiv);
+      container.scrollTop = container.scrollHeight;
+
+      // Call Google Apps Script
+      google.script.run
+        .withSuccessHandler((response) => {
+          const aiDiv = document.createElement('div');
+          aiDiv.className = response.status === 'success' ? 'message ai-msg' : 'message error-msg';
+          aiDiv.innerText = response.message;
+          container.appendChild(aiDiv);
+          
+          resetUI();
+        })
+        .withFailureHandler((err) => {
+          const errDiv = document.createElement('div');
+          errDiv.className = 'message error-msg';
+          errDiv.textContent = 'Error: ' + err.message;
+          container.appendChild(errDiv);
+          
+          resetUI();
+        })
+        .processQuery(prompt);
+
+      promptInput.value = '';
+    }
+
+    function resetUI() {
+      const btn = document.getElementById('send-btn');
+      const loader = document.getElementById('loader');
+      const btnText = document.getElementById('btn-text');
+      const container = document.getElementById('response-container');
+
+      btn.disabled = false;
+      loader.style.display = 'none';
+      btnText.style.opacity = '1';
+      container.scrollTop = container.scrollHeight;
+    }
+
+    // Allow Enter key to send (Shift+Enter for newline)
+    document.getElementById('prompt').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendPrompt();
+      }
+    });
+  </script>
+</body>
+</html>
