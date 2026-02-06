@@ -8,8 +8,10 @@
       --primary: #1a73e8;
       --bg: #ffffff;
       --text: #3c4043;
-      --border: #dadce0;
-      --chat-bg: #f8f9fa;
+      --border: #e0e0e0;
+      --chat-bg: #ffffff;
+      --user-bubble: #000000;
+      --ai-bubble: #f1f3f4;
     }
 
     body {
@@ -20,90 +22,113 @@
       background-color: var(--bg);
       display: flex;
       flex-direction: column;
-      height: 95vh;
+      height: 96vh;
+      overflow: hidden;
+    }
+
+    /* Custom Scrollbar */
+    #response-container::-webkit-scrollbar {
+      width: 6px;
+    }
+    #response-container::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    #response-container::-webkit-scrollbar-thumb {
+      background: #e0e0e0;
+      border-radius: 10px;
+    }
+    #response-container::-webkit-scrollbar-thumb:hover {
+      background: #d0d0d0;
     }
 
     .header {
       margin-bottom: 20px;
     }
 
-    .header h2 {
-      font-size: 18px;
-      margin: 0;
-      color: var(--primary);
-    }
-
     .header p {
-      font-size: 12px;
-      color: #70757a;
-      margin: 4px 0 0 0;
+      font-size: 13px;
+      color: #5f6368;
+      margin: 0;
+      line-height: 1.4;
     }
 
     #response-container {
       flex-grow: 1;
       overflow-y: auto;
       margin-bottom: 16px;
-      padding: 12px;
-      background: var(--chat-bg);
-      border-radius: 8px;
-      font-size: 13px;
-      line-height: 1.5;
-      border: 1px solid var(--border);
+      padding: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
     }
 
     .input-wrapper {
       position: relative;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 10px;
+      background: white;
+      transition: all 0.2s ease;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    }
+
+    .input-wrapper:focus-within {
+      border-color: #000;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
 
     textarea {
       width: 100%;
       box-sizing: border-box;
-      padding: 12px;
-      border: 1px solid var(--border);
-      border-radius: 8px;
+      padding: 8px;
+      padding-bottom: 44px;
+      border: none;
+      border-radius: 0;
       resize: none;
       font-family: inherit;
       font-size: 14px;
       outline: none;
-      transition: border-color 0.2s;
       min-height: 80px;
+      background: transparent;
+      color: #000;
     }
 
-    textarea:focus {
-      border-color: var(--primary);
-      box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.1);
+    textarea:disabled {
+      color: #999;
     }
 
     .btn-send {
-      margin-top: 10px;
-      width: 100%;
-      padding: 10px;
-      background-color: var(--primary);
+      position: absolute;
+      right: 12px;
+      bottom: 12px;
+      width: 36px;
+      height: 36px;
+      background-color: #000;
       color: white;
       border: none;
-      border-radius: 6px;
-      font-weight: 500;
+      border-radius: 50%;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 8px;
-      transition: background 0.2s;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 10;
     }
 
-    .btn-send:hover {
-      background-color: #1765cc;
+    .btn-send:hover:not(:disabled) {
+      background-color: #333;
+      transform: translateY(-1px);
     }
 
     .btn-send:disabled {
-      background-color: #ccc;
+      background-color: #e0e0e0;
       cursor: not-allowed;
     }
 
     .loader {
       display: none;
-      width: 16px;
-      height: 16px;
+      width: 18px;
+      height: 18px;
       border: 2px solid #ffffff;
       border-top: 2px solid transparent;
       border-radius: 50%;
@@ -115,23 +140,77 @@
       100% { transform: rotate(360deg); }
     }
 
+    /* Message Bubbles */
     .message {
-      margin-bottom: 10px;
-      padding: 8px;
-      border-radius: 4px;
+      max-width: 85%;
+      padding: 10px 14px;
+      border-radius: 18px;
+      font-size: 14px;
+      line-height: 1.5;
+      word-wrap: break-word;
+      position: relative;
     }
 
-    .user-msg { border-left: 3px solid var(--primary); background: #e8f0fe; }
-    .ai-msg { border-left: 3px solid #34a853; background: #e6f4ea; }
-    .error-msg { border-left: 3px solid #d93025; background: #fce8e6; }
+    .user-msg {
+      align-self: flex-end;
+      background-color: var(--user-bubble);
+      color: white;
+      border-bottom-right-radius: 4px;
+    }
+
+    .ai-msg {
+      align-self: flex-start;
+      background-color: var(--ai-bubble);
+      color: #000;
+      border-bottom-left-radius: 4px;
+    }
+
+    .error-msg {
+      align-self: center;
+      background: #fce8e6;
+      color: #d93025;
+      font-size: 12px;
+      border-radius: 8px;
+    }
+
+    /* Thinking Shimmer Effect */
+    .thinking-container {
+      align-self: flex-start;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 4px 8px;
+    }
+
+    .thinking-step {
+      font-size: 13px;
+      color: #3f4041;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .shimmer {
+      background: linear-gradient(90deg, #ebe0e0 25%, #949090 50%, #848282 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-weight: 500;
+    }
+
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
 
   </style>
 </head>
 <body>
 
   <div class="header">
-    <h2>AI Sheet Agent</h2>
-    <p>Ask anything about your data</p>
+    <p>Create charts, formulas, and insights using plain English.</p>
   </div>
 
   <div id="response-container">
@@ -139,28 +218,40 @@
   </div>
 
   <div class="input-wrapper">
-    <textarea id="prompt" placeholder="Ex: Clean the missing values in Column B..."></textarea>
+    <textarea id="prompt" placeholder="Ask AI Sheet Agent..."></textarea>
     <button id="send-btn" class="btn-send" onclick="sendPrompt()">
-      <span id="btn-text">Send Query</span>
+      <div id="btn-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="19" x2="12" y2="5"></line>
+          <polyline points="5 12 12 5 19 12"></polyline>
+        </svg>
+      </div>
       <div id="loader" class="loader"></div>
     </button>
   </div>
 
   <script>
+    let isProcessing = false;
+
     function sendPrompt() {
+      if (isProcessing) return;
+
       const promptInput = document.getElementById('prompt');
       const btn = document.getElementById('send-btn');
       const loader = document.getElementById('loader');
-      const btnText = document.getElementById('btn-text');
+      const btnIcon = document.getElementById('btn-icon');
       const container = document.getElementById('response-container');
 
       const prompt = promptInput.value.trim();
       if (!prompt) return;
 
+      isProcessing = true;
+
       // Update UI to Loading State
       btn.disabled = true;
+      promptInput.disabled = true;
       loader.style.display = 'block';
-      btnText.style.opacity = '0.5';
+      btnIcon.style.display = 'none';
       
       // Append User Message
       const userDiv = document.createElement('div');
@@ -169,9 +260,13 @@
       container.appendChild(userDiv);
       container.scrollTop = container.scrollHeight;
 
+      // Show Thinking Steps
+      const thinkingId = showThinkingSteps(container);
+
       // Call Google Apps Script
       google.script.run
         .withSuccessHandler((response) => {
+          removeThinkingSteps(thinkingId);
           const aiDiv = document.createElement('div');
           aiDiv.className = response.status === 'success' ? 'message ai-msg' : 'message error-msg';
           aiDiv.innerText = response.message;
@@ -180,6 +275,7 @@
           resetUI();
         })
         .withFailureHandler((err) => {
+          removeThinkingSteps(thinkingId);
           const errDiv = document.createElement('div');
           errDiv.className = 'message error-msg';
           errDiv.textContent = 'Error: ' + err.message;
@@ -192,16 +288,64 @@
       promptInput.value = '';
     }
 
+    function showThinkingSteps(container) {
+      const thinkingContainer = document.createElement('div');
+      thinkingContainer.className = 'thinking-container';
+      const id = 'thinking-' + Date.now();
+      thinkingContainer.id = id;
+      
+      const stepEl = document.createElement('div');
+      stepEl.className = 'thinking-step shimmer';
+      stepEl.innerText = 'Analyzing query...';
+      thinkingContainer.appendChild(stepEl);
+      
+      container.appendChild(thinkingContainer);
+      container.scrollTop = container.scrollHeight;
+
+      // Dummy logic to cycle steps
+      const steps = [
+        'Analyzing query...',
+        'Reading spreadsheet data...',
+        'Preparing task execution...',
+        'Performing main action...',
+        'Finalizing summary...'
+      ];
+      
+      let currentStep = 0;
+      const interval = setInterval(() => {
+        if (currentStep < steps.length - 1) {
+          currentStep++;
+          stepEl.innerText = steps[currentStep];
+          container.scrollTop = container.scrollHeight;
+        }
+      }, 2000);
+
+      thinkingContainer.dataset.intervalId = interval;
+      return id;
+    }
+
+    function removeThinkingSteps(id) {
+      const el = document.getElementById(id);
+      if (el) {
+        clearInterval(parseInt(el.dataset.intervalId));
+        el.remove();
+      }
+    }
+
     function resetUI() {
+      const promptInput = document.getElementById('prompt');
       const btn = document.getElementById('send-btn');
       const loader = document.getElementById('loader');
-      const btnText = document.getElementById('btn-text');
+      const btnIcon = document.getElementById('btn-icon');
       const container = document.getElementById('response-container');
 
+      isProcessing = false;
       btn.disabled = false;
+      promptInput.disabled = false;
       loader.style.display = 'none';
-      btnText.style.opacity = '1';
+      btnIcon.style.display = 'block';
       container.scrollTop = container.scrollHeight;
+      promptInput.focus();
     }
 
     // Allow Enter key to send (Shift+Enter for newline)
@@ -211,6 +355,9 @@
         sendPrompt();
       }
     });
+
+    // Auto-focus prompt on load
+    window.onload = () => document.getElementById('prompt').focus();
   </script>
 </body>
 </html>
