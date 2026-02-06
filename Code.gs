@@ -3,14 +3,11 @@
  */
 function onOpen() {
   SpreadsheetApp.getUi()
-    .createMenu('🤖 AI Assistant')
+    .createMenu('AI Assistant')
     .addItem('Open AI Sidebar', 'showSidebar')
     .addToUi();
 }
 
-/**
- * Displays the HTML sidebar.
- */
 function showSidebar() {
   const html = HtmlService.createTemplateFromFile('Sidebar')
     .evaluate()
@@ -19,10 +16,6 @@ function showSidebar() {
   SpreadsheetApp.getUi().showSidebar(html);
 }
 
-/**
- * Server-side function to process the user's prompt.
- * This is where you will eventually integrate the LLM.
- */
 function processQuery(prompt) {
   try {
     // For now, we simulate analysis. 
@@ -44,9 +37,6 @@ function processQuery(prompt) {
   }
 }
 
-/**
- * Helper to include CSS/JS files if you want to split them up.
- */
 function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
