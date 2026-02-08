@@ -356,8 +356,28 @@
       }
     });
 
-    // Auto-focus prompt on load
-    window.onload = () => document.getElementById('prompt').focus();
+    // Auto-focus prompt on load and check account
+    window.onload = () => {
+      document.getElementById('prompt').focus();
+      
+      // Check/Create User Account
+      google.script.run
+        .withSuccessHandler((user) => {
+          if (user.status === 'success') {
+            const container = document.getElementById('response-container');
+            const welcomeDiv = document.createElement('div');
+            welcomeDiv.className = 'message ai-msg';
+            welcomeDiv.style.fontSize = '12px';
+            welcomeDiv.style.opacity = '0.7';
+            welcomeDiv.textContent = user.isNew ? 
+              `Welcome! Account created for ${user.email}` : 
+              `Welcome back, ${user.email}`;
+            container.appendChild(welcomeDiv);
+            container.scrollTop = container.scrollHeight;
+          }
+        })
+        .getUserAccount();
+    };
   </script>
 </body>
 </html>
