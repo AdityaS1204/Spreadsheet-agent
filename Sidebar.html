@@ -296,19 +296,20 @@
       
       const stepEl = document.createElement('div');
       stepEl.className = 'thinking-step shimmer';
-      stepEl.innerText = 'Analyzing query...';
+      stepEl.innerText = 'Analyzing your query';
       thinkingContainer.appendChild(stepEl);
       
       container.appendChild(thinkingContainer);
       container.scrollTop = container.scrollHeight;
 
-      // Dummy logic to cycle steps
+      // Steps that reflect the actual backend flow
       const steps = [
-        'Analyzing query...',
-        'Reading spreadsheet data...',
-        'Preparing task execution...',
-        'Performing main action...',
-        'Finalizing summary...'
+        'Analyzing your query',
+        'Extracting sheet schema',
+        'Sending to Agent',
+        'Generating action plan',
+        'Executing spreadsheet actions',
+        'Applying changes to sheet'
       ];
       
       let currentStep = 0;
@@ -318,7 +319,7 @@
           stepEl.innerText = steps[currentStep];
           container.scrollTop = container.scrollHeight;
         }
-      }, 2000);
+      }, 1500);
 
       thinkingContainer.dataset.intervalId = interval;
       return id;
