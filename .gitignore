@@ -1,4 +1,6 @@
-node_modules
+node_modules/
+.env
+backend/.env
+backend/node_modules/
 .clasp.json
-.vscode
-*.log
+.claspignore

@@ -16,150 +16,152 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 // System prompt for action plan generation
-const SYSTEM_PROMPT = `You are an AI assistant that analyzes spreadsheet data and user prompts to generate executable action plans.
+const SYSTEM_PROMPT = `You are an AI Sheet Agent. You analyze spreadsheet schemas and user prompts to either answer questions about the data or generate executable action plans to modify the data.
 
-Your task is to analyze the user's request and the spreadsheet schema, then return a JSON action plan that can be executed by the spreadsheet agent.
-
-IMPORTANT: You must ONLY respond with valid JSON in the exact format specified below. No additional text or explanations.
-
-## Action Plan JSON Schema:
-
+## Your Response Format:
+You must ALWAYS respond with a JSON object in this exact format:
 {
   "success": boolean,
+  "answer": "A clear, conversational response to the user. If they asked a question (e.g., 'how many rows?'), put the answer here.",
   "plan": {
-    "summary": "Brief description of what will be done",
+    "summary": "Briefly describe the modifications being made, or null if no modifications.",
     "steps": [
-      {
-        "stepNumber": number,
-        "action": "ACTION_TYPE",
-        "description": "Human-readable description of this step",
-        "params": {
-          // Action-specific parameters
-        }
-      }
+       // Only include steps if you are MODifying the spreadsheet
     ]
   },
   "error": "Error message if success is false, null otherwise"
 }
 
-## Available Actions:
+## Guidelines:
+1. IF THE USER ASKS A QUESTION (e.g., "How many rows?", "What are the headers?", "Who has the highest sales?"):
+   - Read the provided 'sheetSchema'.
+   - Provide the answer in the "answer" field.
+   - Set "plan.steps" to an empty array [].
 
-1. CONVERT_DATATYPE
-   - Converts a column to a specific data type
-   - params: { "column": "A", "fromType": "string", "toType": "number" }
+2. IF THE USER REQUESTS A TASK/MODIFICATION (e.g., "Sort by price", "Calculate total cost"):
+   - Provide a confirmation in the "answer" field.
+   - Detail the execution in the "plan" object.
 
-2. ADD_FORMULA
-   - Adds a formula to a column
-   - params: { "targetColumn": "C", "formula": "=A1+B1", "startRow": 2, "endRow": null }
+## IMPORTANT: Action Step Format
+Every step in the "steps" array MUST look like this:
+{
+  "stepNumber": 1,
+  "action": "ACTION_NAME",
+  "description": "Description of what this step does",
+  "params": {
+     // Parameters for the specific action
+  }
+}
 
-3. CREATE_CHART
-   - Creates a chart from data
-   - params: { "type": "bar|line|pie", "dataRange": "A1:B10", "title": "Chart Title" }
+## ONE-SHOT EXAMPLE:
+User: "Calculate total cost (Price * Qty) in a new column"
+Response:
+{
+  "success": true,
+  "answer": "I'm adding a new 'Total Cost' column calculating Price * Quantity.",
+  "plan": {
+    "summary": "Adding Total Cost column",
+    "steps": [
+      {
+        "stepNumber": 1,
+        "action": "ADD_COLUMN",
+        "description": "Add new column with formula",
+        "params": {
+          "columnName": "Total Cost",
+          "formula": "=[Price]*[Qty]"
+        }
+      }
+    ]
+  },
+  "error": null
+}
 
-4. SORT_DATA
-   - Sorts data by a column
-   - params: { "column": "A", "order": "asc|desc", "hasHeader": true }
+3. Available Actions (ONLY for plan.steps):
+   - CONVERT_DATATYPE: { "column": "A", "toType": "number|string|date" }
+   - ADD_FORMULA: { "targetColumn": "C", "formula": "=A1+B1", "startRow": 2 }
+   - CREATE_CHART: { "type": "bar|line|pie", "dataRange": "A1:B10", "title": "..." }
+   - SORT_DATA: { "column": "A", "order": "asc|desc" }
+   - FILTER_DATA: { "column": "A", "operator": "equals|contains|greater", "value": "..." }
+   - ADD_COLUMN: { "columnName": "New", "referenceColumn": "A", "formula": "=A1*2" }
+   - DELETE_COLUMN: { "column": "C" }
+   - DELETE_ROWS: { "column": "A", "condition": "empty|duplicate|equals", "value": null }
+   - FORMAT_CELLS: { "range": "A1:D10", "format": "currency|percentage|date" }
+   - CLEAN_DATA: { "column": "A", "operation": "trim|uppercase|lowercase" }
+   - AGGREGATE: { "column": "B", "operation": "sum|avg|count", "targetCell": "B20" }
+   - YOY_CALCULATION: { "valueColumn": "B", "dateColumn": "A" }
 
-5. FILTER_DATA
-   - Filters rows based on a condition
-   - params: { "column": "A", "operator": "equals|contains|greater|less", "value": "some value" }
-
-6. ADD_COLUMN
-   - Adds a new column with calculated values
-   - params: { "columnName": "New Column", "position": "after", "referenceColumn": "B", "formula": "=A1*2" }
-
-7. DELETE_COLUMN
-   - Deletes a column
-   - params: { "column": "C" }
-
-8. DELETE_ROWS
-   - Deletes rows matching a condition
-   - params: { "column": "A", "condition": "empty|duplicate|equals", "value": null }
-
-9. FORMAT_CELLS
-   - Formats cells in a range
-   - params: { "range": "A1:D10", "format": "currency|percentage|date", "style": {} }
-
-10. CLEAN_DATA
-    - Cleans data (trim whitespace, remove duplicates, etc.)
-    - params: { "column": "A", "operation": "trim|uppercase|lowercase|remove_duplicates" }
-
-11. AGGREGATE
-    - Performs aggregation (sum, average, count, etc.)
-    - params: { "column": "B", "operation": "sum|average|count|min|max", "targetCell": "B20" }
-
-12. YOY_CALCULATION
-    - Adds Year-over-Year calculation column
-    - params: { "valueColumn": "B", "dateColumn": "A", "newColumnName": "YoY Growth %" }
-
-Analyze the user prompt and sheet schema carefully. Generate the most appropriate action plan. If the request is unclear or impossible, set success to false and provide a helpful error message.`;
+Current Sheet Schema:
+{{SCHEMA}}`;
 
 /**
  * POST /plan
  * Analyzes the prompt and sheet schema to generate an action plan
  */
+/**
+ * POST /plan
+ * Analyzes the prompt and sheet schema to generate an action plan
+ */
 app.post('/plan', async (req, res) => {
+  const requestId = Date.now();
+  console.log(`[${requestId}] POST /plan received`);
+  
   try {
     const { prompt, sheetSchema } = req.body;
+    
+    // Log summary of the request
+    console.log(`[${requestId}] Prompt: "${prompt}"`);
+    console.log(`[${requestId}] Sheet Schema: ${sheetSchema ? `${sheetSchema.rowCount} rows, ${sheetSchema.colCount} cols` : 'MISSING'}`);
 
     if (!prompt) {
-      return res.status(400).json({
-        success: false,
-        error: 'Prompt is required'
-      });
+      console.warn(`[${requestId}] Error: Prompt is required`);
+      return res.status(400).json({ success: false, error: 'Prompt is required' });
     }
 
-    // Build the user message with context
-    const userMessage = `
-## User Request:
-${prompt}
+    const userMessage = `User Request: "${prompt}"\n\nCurrent Schema: ${JSON.stringify(sheetSchema)}`;
+    
+    console.log(`[${requestId}] Sending request to Groq API (model: llama-3.3-70b-versatile)...`);
+    const startTime = Date.now();
 
-## Current Sheet Schema:
-${JSON.stringify(sheetSchema, null, 2)}
-
-Generate an action plan to fulfill the user's request.`;
-
-    // Call Groq API
     const completion = await groq.chat.completions.create({
       messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'system', content: SYSTEM_PROMPT.replace('{{SCHEMA}}', JSON.stringify(sheetSchema)) },
         { role: 'user', content: userMessage }
       ],
       model: 'llama-3.3-70b-versatile',
-      temperature: 0.3,
-      max_tokens: 2048,
+      temperature: 0.1,
       response_format: { type: 'json_object' }
     });
+    
+    const duration = Date.now() - startTime;
+    console.log(`[${requestId}] Groq API responded in ${duration}ms`);
 
     const responseText = completion.choices[0]?.message?.content;
+    console.log(`[${requestId}] Raw AI response:`, responseText);
 
     if (!responseText) {
-      return res.status(500).json({
-        success: false,
-        error: 'No response from AI model'
-      });
+      console.error(`[${requestId}] Error: No content in Groq response`);
+      return res.status(500).json({ success: false, error: 'No response from AI model' });
     }
 
-    // Parse the JSON response
-    let actionPlan;
+    let result;
     try {
-      actionPlan = JSON.parse(responseText);
+      result = JSON.parse(responseText);
+      console.log(`[${requestId}] Successfully parsed JSON response`);
     } catch (parseError) {
-      console.error('Failed to parse AI response:', responseText);
-      return res.status(500).json({
-        success: false,
-        error: 'Failed to parse AI response'
-      });
+      console.error(`[${requestId}] JSON Parse Error:`, parseError);
+      console.error(`[${requestId}] Failed JSON content:`, responseText);
+      return res.status(500).json({ success: false, error: 'Failed to parse AI response' });
     }
 
-    res.json(actionPlan);
+    console.log(`[${requestId}] Sending success response to client`);
+    res.json(result);
 
   } catch (error) {
-    console.error('Error in /plan:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message || 'Internal server error'
-    });
+    console.error(`[${requestId}] Server Error:`, error);
+    if (error.response) {
+       console.error(`[${requestId}] Upstream API Error Data:`, error.response.data);
+    }
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
