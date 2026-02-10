@@ -142,17 +142,15 @@
 
     /* Message Bubbles */
     .message {
-      max-width: 85%;
       padding: 10px 14px;
       border-radius: 18px;
-      font-size: 14px;
+      font-size: 12px;
       line-height: 1.5;
       word-wrap: break-word;
       position: relative;
     }
 
     .user-msg {
-      align-self: flex-end;
       background-color: var(--user-bubble);
       color: white;
       border-bottom-right-radius: 4px;
@@ -163,6 +161,7 @@
       background-color: var(--ai-bubble);
       color: #000;
       border-bottom-left-radius: 4px;
+      max-width: 85%;
     }
 
     .error-msg {
@@ -205,14 +204,35 @@
       100% { background-position: -200% 0; }
     }
 
+    /* Copy Button Below User Bubble */
+    .copy-btn-below {
+      background: none;
+      border: none;
+      color: #9aa0a6;
+      font-size: 10px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 4px;
+      padding: 2px 4px;
+      border-radius: 4px;
+      transition: color 0.2s;
+    }
+
+    .copy-btn-below:hover {
+      color: #5f6368;
+      background-color: #f1f3f4;
+    }
   </style>
 </head>
 <body>
 
   <div class="header">
-    <p>Create charts, formulas, and insights using plain English.</p>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+      <p>Create charts, formulas, and insights using plain English.</p>
+    </div>
   </div>
-
   <div id="response-container">
     <div class="message ai-msg">Hello! I'm ready to analyze your sheet. What would you like to know?</div>
   </div>
@@ -253,11 +273,50 @@
       loader.style.display = 'block';
       btnIcon.style.display = 'none';
       
-      // Append User Message
+      // Append User Message Container
+      const wrapperDiv = document.createElement('div');
+      wrapperDiv.className = 'user-msg-wrapper';
+      wrapperDiv.style.alignSelf = 'flex-end';
+      wrapperDiv.style.display = 'flex';
+      wrapperDiv.style.flexDirection = 'column';
+      wrapperDiv.style.alignItems = 'flex-end';
+      wrapperDiv.style.maxWidth = '85%';
+
       const userDiv = document.createElement('div');
       userDiv.className = 'message user-msg';
+      userDiv.style.maxWidth = '100%'; // let wrapper constrain width
       userDiv.textContent = prompt;
-      container.appendChild(userDiv);
+      
+      wrapperDiv.appendChild(userDiv);
+
+      // Copy Button (Below bubble)
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'copy-btn-below';
+      copyBtn.innerHTML = `
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg> Copy
+      `;
+      copyBtn.onclick = (e) => {
+        navigator.clipboard.writeText(prompt);
+        copyBtn.innerHTML = `
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+             <polyline points="20 6 9 17 4 12"></polyline>
+          </svg> Copied
+        `;
+        setTimeout(() => {
+          copyBtn.innerHTML = `
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg> Copy
+          `;
+        }, 1500);
+      };
+      
+      wrapperDiv.appendChild(copyBtn);
+      container.appendChild(wrapperDiv);
       container.scrollTop = container.scrollHeight;
 
       // Show Thinking Steps
@@ -365,6 +424,10 @@
       google.script.run
         .withSuccessHandler((user) => {
           if (user.status === 'success') {
+            // Update Header with Email
+            const emailDisplay = document.getElementById('user-email-display');
+            if (emailDisplay) emailDisplay.textContent = user.email;
+
             const container = document.getElementById('response-container');
             const welcomeDiv = document.createElement('div');
             welcomeDiv.className = 'message ai-msg';
