@@ -227,7 +227,6 @@
   </style>
 </head>
 <body>
-
   <div class="header">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
       <p>Create charts, formulas, and insights using plain English.</p>
@@ -264,7 +263,6 @@
 
       const prompt = promptInput.value.trim();
       if (!prompt) return;
-
       isProcessing = true;
 
       // Update UI to Loading State
@@ -289,7 +287,6 @@
       
       wrapperDiv.appendChild(userDiv);
 
-      // Copy Button (Below bubble)
       const copyBtn = document.createElement('button');
       copyBtn.className = 'copy-btn-below';
       copyBtn.innerHTML = `
@@ -424,20 +421,9 @@
       google.script.run
         .withSuccessHandler((user) => {
           if (user.status === 'success') {
-            // Update Header with Email
+            // Update Header with Email (if element exists)
             const emailDisplay = document.getElementById('user-email-display');
             if (emailDisplay) emailDisplay.textContent = user.email;
-
-            const container = document.getElementById('response-container');
-            const welcomeDiv = document.createElement('div');
-            welcomeDiv.className = 'message ai-msg';
-            welcomeDiv.style.fontSize = '12px';
-            welcomeDiv.style.opacity = '0.7';
-            welcomeDiv.textContent = user.isNew ? 
-              `Welcome! Account created for ${user.email}` : 
-              `Welcome back, ${user.email}`;
-            container.appendChild(welcomeDiv);
-            container.scrollTop = container.scrollHeight;
           }
         })
         .getUserAccount();
