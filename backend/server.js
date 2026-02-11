@@ -77,11 +77,13 @@ Response:
 }
 
 3. Available Actions (ONLY for plan.steps):
-   - CONVERT_DATATYPE: { "column": "A", "toType": "number|string|date" }
+   - CONVERT_DATATYPE: { "column": "A", "toType": "number|text|date" }
    - ADD_FORMULA: { "targetColumn": "C", "formula": "=A1+B1", "startRow": 2 }
-   - CREATE_CHART: { "type": "bar|line|pie", "dataRange": "A1:B10", "title": "..." }
+   - CREATE_CHART: { "chartType": "bar|column|line|pie|scatter", "range": "A1:C20", "title": "Sales Report", "xAxisColumn": "A", "seriesColumns": ["B", "C"] }
    - SORT_DATA: { "column": "A", "order": "asc|desc" }
-   - FILTER_DATA: { "column": "A", "operator": "equals|contains|greater", "value": "..." }
+   - FILTER_DATA: { "column": "A", "operator": "equals|not_equals|contains|not_contains|greater|less|empty|not_empty", "value": "pending" }
+     NOTE: FILTER_DATA REMOVES/DELETES rows that match the condition. 
+     Example: operator "equals" with value "pending" will DELETE all rows where column A equals "pending"
    - ADD_COLUMN: { "columnName": "New", "referenceColumn": "A", "formula": "=A1*2" }
    - DELETE_COLUMN: { "column": "C" }
    - DELETE_ROWS: { "column": "A", "condition": "empty|duplicate|equals", "value": null }
