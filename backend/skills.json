@@ -1,0 +1,168 @@
+{
+    "formula": {
+        "patterns": {
+            "sum": {
+                "type": "aggregate",
+                "required_params": [
+                    "column"
+                ],
+                "builder": "buildSum"
+            },
+            "sum_if": {
+                "type": "aggregate",
+                "required_params": [
+                    "sum_column",
+                    "criteria_column",
+                    "operator",
+                    "value"
+                ],
+                "builder": "buildSumIf"
+            },
+            "sum_ifs": {
+                "type": "aggregate",
+                "required_params": [
+                    "sum_column",
+                    "criteria"
+                ],
+                "builder": "buildSumIfs"
+            },
+            "average": {
+                "type": "aggregate",
+                "required_params": [
+                    "column"
+                ],
+                "builder": "buildAverage"
+            },
+            "count": {
+                "type": "aggregate",
+                "required_params": [
+                    "column"
+                ],
+                "builder": "buildCount"
+            },
+            "percent_growth": {
+                "type": "row_wise",
+                "required_params": [
+                    "current_cell",
+                    "previous_cell"
+                ],
+                "builder": "buildPercentGrowth"
+            },
+            "running_total": {
+                "type": "row_wise",
+                "required_params": [
+                    "column",
+                    "start_row"
+                ],
+                "builder": "buildRunningTotal"
+            },
+            "row_calculation": {
+                "type": "row_wise",
+                "required_params": [
+                    "formula",
+                    "column_name"
+                ],
+                "builder": "buildRowCalc"
+            }
+        },
+        "rules": {
+            "start_row_detection": "first_data_row",
+            "end_row_detection": "last_non_empty",
+            "wrap_with_iferror": true,
+            "never_overwrite_non_empty": true
+        }
+    },
+    "chart": {
+        "goals": {
+            "time_series_trend": {
+                "default_type": "line"
+            },
+            "categorical_comparison": {
+                "default_type": "bar"
+            },
+            "part_to_whole": {
+                "default_type": "pie",
+                "max_categories": 7
+            },
+            "correlation": {
+                "default_type": "scatter"
+            }
+        },
+        "supported_types": [
+            "line",
+            "bar",
+            "column",
+            "pie",
+            "scatter"
+        ],
+        "rules": {
+            "always_include_title": true,
+            "no_3d": true,
+            "single_series_hide_legend": true,
+            "max_colors": 7,
+            "pie_max_slices": 7
+        },
+        "styling": {
+            "default_palette": [
+                "#4285F4",
+                "#EA4335",
+                "#FBBC04",
+                "#34A853"
+            ],
+            "chart_area": {
+                "width": "70%",
+                "height": "70%"
+            },
+            "title_style": {
+                "fontSize": 16,
+                "bold": true
+            }
+        }
+    },
+    "clean_data": {
+        "operations": {
+            "remove_duplicates": {},
+            "trim_whitespace": {},
+            "standardize_dates": {},
+            "convert_to_number": {},
+            "fill_missing_values": {},
+            "filter_data": {
+                "required_params": [
+                    "column",
+                    "operator",
+                    "value"
+                ],
+                "supported_operators": [
+                    "equals",
+                    "not_equals",
+                    "contains",
+                    "not_contains",
+                    "greater",
+                    "less",
+                    "empty",
+                    "not_empty"
+                ]
+            }
+        },
+        "rules": {
+            "preview_required": true,
+            "never_delete_header": true
+        }
+    },
+    "organization": {
+        "operations": {
+            "sort_data": {
+                "required_params": [
+                    "column",
+                    "order"
+                ]
+            },
+            "format_cells": {
+                "required_params": [
+                    "range",
+                    "format"
+                ]
+            }
+        }
+    }
+}
