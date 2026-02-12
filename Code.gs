@@ -59,18 +59,23 @@ function getUserAccount() {
 /**
  * Extracts the schema of the current sheet for AI analysis
  */
+/**
+ * Extracts the schema of the current sheet for AI analysis.
+ * Uses diverse sampling and top-value detection for improved accuracy.
+ */
 function getSheetSchema() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   const dataRange = sheet.getDataRange();
   const values = dataRange.getValues();
   
-  if (values.length === 0) {
-    return { sheetName: sheet.getName(), headers: [], sampleData: [], rowCount: 0, colCount: 0 };
+  if (values.length <= 1) { // 0 or just 1 row (possibly header only)
+    return { sheetName: sheet.getName(), headers: [], sampleData: [], rowCount: values.length, colCount: 0 };
   }
 
   // Smart Header Detection
   const headerRowIndex = detectHeaderRow(values);
-  const headerRowNumber = headerRowIndex + 1; // 1-based row number
+  const headerRowNumber = headerRowIndex + 1; // 1-based index
+  const dataStartIndex = headerRowIndex + 1;
 
   const headers = values[headerRowIndex].map((header, index) => ({
     name: header ? String(header) : `Column ${String.fromCharCode(65 + index)}`,
@@ -78,26 +83,67 @@ function getSheetSchema() {
     index: index
   }));
 
-  // Get sample data (first 5 rows after header)
-  // Ensure we don't go out of bounds
-  const dataStartIndex = headerRowIndex + 1;
-  const sampleData = values.slice(dataStartIndex, dataStartIndex + 5).map(row => {
-    const rowObj = {};
+  // --- 1. DIVERSE SAMPLING ---
+  // Pick up to 9 rows: 3 from start, 3 from middle, 3 from end
+  const dataRows = values.slice(dataStartIndex);
+  const totalDataRows = dataRows.length;
+  let sampledIndices = [];
+
+  if (totalDataRows <= 10) {
+    sampledIndices = dataRows.map((_, i) => i);
+  } else {
+    // Start (3)
+    sampledIndices = [0, 1, 2];
+    // Middle (3)
+    const mid = Math.floor(totalDataRows / 2);
+    sampledIndices.push(mid - 1, mid, mid + 1);
+    // End (3)
+    sampledIndices.push(totalDataRows - 3, totalDataRows - 2, totalDataRows - 1);
+  }
+
+  // Remove duplicates and out of bounds, then sort
+  sampledIndices = [...new Set(sampledIndices)]
+    .filter(i => i >= 0 && i < totalDataRows)
+    .sort((a, b) => a - b);
+
+  const sampleData = sampledIndices.map(idx => {
+    const row = dataRows[idx];
+    const rowObj = { _rowNumber: idx + dataStartIndex + 1 };
     headers.forEach((h, i) => {
       rowObj[h.name] = row[i];
     });
     return rowObj;
   });
 
-  // Detect data types for each column
+  // --- 2. COLUMN STATS & TOP VALUES ---
   const columnTypes = headers.map((h, i) => {
-    // Sample a few rows for type detection
-    const colValues = values.slice(dataStartIndex).map(row => row[i]).filter(v => v !== '' && v !== null);
-    return {
-      ...h,
-      detectedType: detectDataType(colValues),
-      sampleValues: colValues.slice(0, 3)
-    };
+    const colValues = dataRows.map(row => row[i]).filter(v => v !== '' && v !== null);
+    const type = detectDataType(colValues);
+    
+    let stats = { detectedType: type };
+
+    if (type === 'string' && colValues.length > 0) {
+      // Frequency count for categorical data
+      const counts = {};
+      colValues.forEach(v => {
+        const key = String(v).trim();
+        counts[key] = (counts[key] || 0) + 1;
+      });
+      
+      // Sort and take top 10
+      stats.topValues = Object.entries(counts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([value, count]) => ({ value, count }));
+    } else if (type === 'number' && colValues.length > 0) {
+      const nums = colValues.filter(v => typeof v === 'number');
+      if (nums.length > 0) {
+        stats.min = Math.min(...nums);
+        stats.max = Math.max(...nums);
+      }
+    }
+
+    return { ...h, ...stats };
   });
 
   return {
@@ -106,7 +152,7 @@ function getSheetSchema() {
     sampleData: sampleData,
     rowCount: values.length,
     colCount: headers.length,
-    headerRow: headerRowNumber // Pass this to backend if needed
+    headerRow: headerRowNumber
   };
 }
 
@@ -187,8 +233,18 @@ function processQuery(prompt) {
       executionResult = executePlan(actionPlan.plan);
     }
     
-    // Combine the AI's conversational answer with the execution summary
+    // Combine the AI's conversational answer with the execution summary and direct results
     let finalMessage = actionPlan.answer || 'Task completed.';
+    
+    // NEW: Extract any QUERY_VALUE results to show them as direct answers
+    const calculationResults = executionResult.stepResults
+      .filter(r => r.status === 'success' && r.result && String(r.result).startsWith('RESULT:'))
+      .map(r => String(r.result).replace('RESULT: ', '').replace('RESULT:', ''));
+
+    if (calculationResults.length > 0) {
+      finalMessage = `### Result: ${calculationResults.join(', ')}\n\n${finalMessage}`;
+    }
+
     if (executionResult.summary) {
       finalMessage += `\n\n${executionResult.summary}`;
     }
@@ -325,6 +381,8 @@ function executeAction(step) {
       return aggregate(params);
     case 'YOY_CALCULATION':
       return yoyCalculation(params);
+    case 'QUERY_VALUE':
+      return queryValue(params);
     default:
       throw new Error(`Unknown action: ${action}`);
   }
@@ -437,7 +495,11 @@ function createChart(params) {
       .setChartType(chartType)
       .addRange(range)
       .setPosition(positionRow, positionCol, 0, 0)
-      .setOption('title', params.title || 'Chart Generated by AI')
+      .setOption('title', params.title || 'Data Analysis')
+      .setOption('titleTextStyle', { fontSize: 16, bold: true, color: '#202124' })
+      .setOption('legend', { position: 'right', textStyle: { fontSize: 12 } })
+      .setOption('colors', ['#4285F4', '#EA4335', '#FBBC04', '#34A853', '#FF6D01'])
+      .setOption('chartArea', { width: '75%', height: '75%' })
       .setOption('useFirstRowAsHeaders', true);
     
     console.log('Building chart...');
@@ -503,7 +565,7 @@ function filterData(params) {
     
     let rowsToDelete = [];
     checkValues.forEach(([val], i) => {
-      let shouldDelete = false;
+      let isMatch = false;
       
       // Ensure comparisons are robust
       const checkVal = (val === '' || val === null) ? '' : String(val).toLowerCase().trim();
@@ -511,53 +573,65 @@ function filterData(params) {
 
       switch (params.operator) {
         case 'equals': 
-          // DELETE rows where value equals the target
-          shouldDelete = checkVal === paramVal;
+          isMatch = checkVal === paramVal;
           break;
         case 'not_equals':
-          // DELETE rows where value does NOT equal the target
-          shouldDelete = checkVal !== paramVal;
+          isMatch = checkVal !== paramVal;
           break;
         case 'contains': 
-          // DELETE rows where value contains the target
-          shouldDelete = checkVal.includes(paramVal);
+          isMatch = checkVal.includes(paramVal);
           break;
         case 'not_contains':
-          // DELETE rows where value does NOT contain the target
-          shouldDelete = !checkVal.includes(paramVal);
+          isMatch = !checkVal.includes(paramVal);
           break;
         case 'greater': 
-          shouldDelete = parseFloat(val) > parseFloat(params.value);
+          isMatch = parseFloat(val) > parseFloat(params.value);
           break;
         case 'less': 
-          shouldDelete = parseFloat(val) < parseFloat(params.value);
+          isMatch = parseFloat(val) < parseFloat(params.value);
           break;
         case 'empty':
-          shouldDelete = val === '' || val === null;
+          isMatch = val === '' || val === null || val === '';
           break;
         case 'not_empty':
-          shouldDelete = val !== '' && val !== null;
+          isMatch = val !== '' && val !== null;
           break;
       }
       
-      if (shouldDelete) {
+      // LOGIC: Filter means WHAT TO KEEP. So we delete if it is NOT a match.
+      if (!isMatch) {
         rowsToDelete.push(startRow + i);
       }
     });
     
     console.log(`Found ${rowsToDelete.length} rows to delete:`, rowsToDelete);
     
+    // Safety & Impact Analysis
+    const totalDataRows = lastRow - startRow + 1;
+    const impactPercent = totalDataRows > 0 ? (rowsToDelete.length / totalDataRows * 100).toFixed(1) : 0;
+    
+    if (rowsToDelete.length === 0) {
+      return `No rows found where ${params.column} ${params.operator} "${params.value}"`;
+    }
+
+    if (impactPercent > 80 && rowsToDelete.length > 10) {
+      console.warn(`HIGH IMPACT DELETE: ${impactPercent}% of data (${rowsToDelete.length} rows)`);
+      // We still proceed, but the logging is heavy
+    }
+
     // CRITICAL: Sort in DESCENDING order and delete from bottom to top
     // This prevents row index shifting issues
     rowsToDelete.sort((a, b) => b - a);
     
     console.log('Deleting rows in order:', rowsToDelete);
     rowsToDelete.forEach(row => {
-      console.log(`Deleting row ${row}`);
       sheet.deleteRow(row);
     });
     
-    return `Deleted ${rowsToDelete.length} rows where ${params.column} ${params.operator} "${params.value}"`;
+    let resultMsg = `Kept rows where ${params.column} ${params.operator} "${params.value}" (Deleted ${rowsToDelete.length} non-matching rows)`;
+    if (impactPercent > 50) resultMsg = "⚠️ " + resultMsg + ". This removed more than half your data.";
+    
+    return resultMsg;
     
   } catch (e) {
     console.error('Error in filterData:', e.toString());
@@ -626,8 +700,20 @@ function deleteRows(params) {
      });
   }
 
+  // Safety & Impact Analysis
+  const totalDataRows = lastRow - startRow + 1;
+  const impactPercent = totalDataRows > 0 ? (rowsToDelete.length / totalDataRows * 100).toFixed(1) : 0;
+
+  if (rowsToDelete.length === 0) return 'No matching rows found to delete';
+
+  // Sort descending and delete from bottom to top
+  rowsToDelete.sort((a, b) => b - a);
   rowsToDelete.forEach(row => sheet.deleteRow(row));
-  return `Deleted ${rowsToDelete.length} rows`;
+  
+  let resultMsg = `Deleted ${rowsToDelete.length} rows (${impactPercent}% of data) based on ${params.condition}`;
+  if (impactPercent > 50) resultMsg = "⚠️ " + resultMsg + ". This removed more than half your data.";
+  
+  return resultMsg;
 }
 
 /**
@@ -670,6 +756,7 @@ function cleanData(params) {
   let cleaned;
   switch (params.operation) {
     case 'trim':
+    case 'trim_whitespace':
       cleaned = checkValues.map(([v]) => [String(v).trim()]);
       break;
     case 'uppercase':
@@ -677,6 +764,15 @@ function cleanData(params) {
       break;
     case 'lowercase':
       cleaned = checkValues.map(([v]) => [String(v).toLowerCase()]);
+      break;
+    case 'convert_to_number':
+      cleaned = checkValues.map(([v]) => {
+        const num = parseFloat(String(v).replace(/[$,]/g, ''));
+        return [isNaN(num) ? v : num];
+      });
+      break;
+    case 'fill_missing_values':
+      cleaned = checkValues.map(([v]) => [ (v === '' || v === null) ? (params.fillValue || 0) : v ]);
       break;
     default:
       cleaned = checkValues;
@@ -710,6 +806,40 @@ function aggregate(params) {
   
   sheet.getRange(params.targetCell).setFormula(formula);
   return `Added ${params.operation} formula at ${params.targetCell}`;
+}
+
+/**
+ * Evaluates a formula and returns the value
+ */
+function queryValue(params) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  // Use a cell far outside common data range for calculation
+  const tempCell = sheet.getRange(sheet.getMaxRows(), sheet.getMaxColumns()); 
+  
+  try {
+    tempCell.setFormula(params.formula);
+    SpreadsheetApp.flush(); // Force calculation
+    const value = tempCell.getValue();
+    tempCell.clearContent();
+    
+    // Format the value nicely
+    let formattedValue = value;
+    if (typeof value === 'number') {
+      if (value === 0) {
+        formattedValue = "0";
+      } else if (Math.abs(value) > 1000) {
+        formattedValue = value.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+      } else {
+        formattedValue = value.toFixed(2).replace(/\.?0+$/, '');
+        if (formattedValue === "" || formattedValue === "-") formattedValue = "0";
+      }
+    }
+    
+    return `RESULT: ${formattedValue}`;
+  } catch (e) {
+    tempCell.clearContent();
+    throw new Error(`Calculation error: ${e.toString()}`);
+  }
 }
 
 /**
