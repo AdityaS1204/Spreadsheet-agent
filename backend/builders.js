@@ -15,7 +15,29 @@ const builders = {
   
   buildCount: (params) => {
     const { column } = params;
-    return `=COUNT(${column}:${column})`;
+    // Use COUNTA to support both text and numeric entries
+    return `=COUNTA(${column}:${column})`;
+  },
+  
+  buildCountIf: (params) => {
+    const { criteria_column, operator, value } = params;
+    const sheetOp = mapOperator(operator);
+    const criterion = (sheetOp === '=') ? value : `${sheetOp}${value}`;
+    const formattedCriterion = typeof criterion === 'string' ? `"${criterion}"` : criterion;
+    return `=COUNTIF(${criteria_column}:${criteria_column}, ${formattedCriterion})`;
+  },
+  
+  buildCountIfs: (params) => {
+    const { criteria } = params;
+    let formula = `=COUNTIFS(`;
+    criteria.forEach((c, idx) => {
+      const sheetOp = mapOperator(c.operator);
+      const criterion = (sheetOp === '=') ? c.value : `${sheetOp}${c.value}`;
+      const formattedCriterion = typeof criterion === 'string' ? `"${criterion}"` : criterion;
+      formula += `${idx > 0 ? ', ' : ''}${c.column}:${c.column}, ${formattedCriterion}`;
+    });
+    formula += `)`;
+    return formula;
   },
   
   buildSumIf: (params) => {
