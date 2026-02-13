@@ -234,24 +234,39 @@ function processQuery(prompt) {
     }
     
     // Combine the AI's conversational answer with the execution summary and direct results
-    let finalMessage = actionPlan.answer || 'Task completed.';
+    let finalMessage = "";
     
-    // NEW: Extract any QUERY_VALUE results to show them as direct answers
+    // 1. Extract and format Calculation Results (QUERY_VALUE)
     const calculationResults = executionResult.stepResults
       .filter(r => r.status === 'success' && r.result && String(r.result).startsWith('RESULT:'))
       .map(r => String(r.result).replace('RESULT: ', '').replace('RESULT:', ''));
 
     if (calculationResults.length > 0) {
-      finalMessage = `### Result: ${calculationResults.join(', ')}\n\n${finalMessage}`;
+      finalMessage += "ANALYSIS RESULTS\n";
+      if (calculationResults.length === 1) {
+        finalMessage += `${calculationResults[0]}\n\n`;
+      } else {
+        calculationResults.forEach(res => {
+          finalMessage += `• ${res}\n`;
+        });
+        finalMessage += "\n";
+      }
     }
 
+    // 2. Add the AI's conversational answer
+    if (actionPlan.answer) {
+      finalMessage += `**AI Insight**\n${actionPlan.answer}\n\n`;
+    }
+
+    // 3. Add technical summary
     if (executionResult.summary) {
-      finalMessage += `\n\n${executionResult.summary}`;
+      finalMessage += "\n";
+      finalMessage += executionResult.summary;
     }
 
     return {
       status: 'success',
-      message: finalMessage,
+      message: finalMessage.trim(),
       details: executionResult.stepResults
     };
 
@@ -332,9 +347,9 @@ function executePlan(plan) {
     }
   }
 
-  const planSummary = plan.summary ? plan.summary : 'Action plan executed.';
+  const planSummary = plan.summary || 'Operation complete.';
   return {
-    summary: `${planSummary}\n\n✅ Completed ${successCount}/${plan.steps.length} steps`,
+    summary: `${planSummary}\n\nExecution status: ${successCount} of ${plan.steps.length} items processed correctly.`,
     stepResults: stepResults
   };
 }
@@ -835,7 +850,8 @@ function queryValue(params) {
       }
     }
     
-    return `RESULT: ${formattedValue}`;
+    const label = params.label ? `${params.label}: ` : '';
+    return `RESULT: ${label}${formattedValue}`;
   } catch (e) {
     tempCell.clearContent();
     throw new Error(`Calculation error: ${e.toString()}`);
