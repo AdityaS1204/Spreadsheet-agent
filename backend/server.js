@@ -18,6 +18,14 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 const CLASSIFICATION_PROMPT = `Analyze the user prompt and classify the primary intent.
+
+## Intent Guidelines:
+- "formula": Use this for ANY request that requires a calculation, sum, average, count, comparison, or specific numerical result from the spreadsheet data. If the user asks "How much", "What is the total", "Compare X and Y", or "Give me the percentage", it is a FORMULA intent.
+- "chart": Visualizing data with graphs/charts.
+- "clean_data": Filtering rows, removing duplicates, trim, or data formatting.
+- "organization": Sorting or styling large ranges.
+- "insight": Qualitative questions about what the data represents, schema explanations, or general trends that DON'T require a specific calculation.
+
 Return JSON only:
 {
   "intent": "formula" | "chart" | "clean_data" | "organization" | "insight",
@@ -38,8 +46,14 @@ Select supported patterns from the provided skills JSON.
 Current Skills:
 {{SKILLS_JSON}}
 
-If intent = formula:
-Return: { "conversational_answer": string, "pattern": string, "parameters": {} }
+If intent = formula or insight:
+Return: { 
+  "conversational_answer": string, 
+  "calculations": [
+    { "pattern": "sum_if" | "average" | "count" | etc, "parameters": {} }
+  ]
+}
+## NOTE: For "OR" conditions (e.g., "Category is Fashion OR Footwear"), generate MULTIPLE "sum_if" patterns in the calculations array instead of one "sum_ifs". "sum_ifs" is for "AND" logic.
 
 If intent = chart:
 Return: { "conversational_answer": string, "chart_goal": string, "explicit_chart_type": string | null, "x_column": string, "y_columns": [] }
@@ -76,6 +90,7 @@ app.post('/plan', async (req, res) => {
     if (!prompt) return res.status(400).json({ success: false, error: 'Prompt is required' });
 
     // STEP 3: Intent Classification
+    console.log(`[${requestId}] Classification Prompt Sent`);
     const classification = await groq.chat.completions.create({
       messages: [{ role: 'system', content: CLASSIFICATION_PROMPT }, { role: 'user', content: prompt }],
       model: 'llama-3.3-70b-versatile',
@@ -83,8 +98,10 @@ app.post('/plan', async (req, res) => {
       response_format: { type: 'json_object' }
     });
     
-    const intentResult = JSON.parse(classification.choices[0].message.content);
-    console.log(`[${requestId}] Classified intent:`, intentResult);
+    const rawClassificationContent = classification.choices[0].message.content;
+    const intentResult = JSON.parse(rawClassificationContent);
+    console.log(`[${requestId}] LLM Classification RAW:`, rawClassificationContent);
+    console.log(`[${requestId}] Parsed intent:`, intentResult);
 
     if (intentResult.confidence < 0.6) {
       return res.json({ success: false, answer: "I'm not sure what you want to do. Could you be more specific?", plan: { steps: [] } });
@@ -94,6 +111,7 @@ app.post('/plan', async (req, res) => {
 
     // Handle 'insight' (simple Q&A) separately if needed, or route to planner
     if (intent === 'insight') {
+      console.log(`[${requestId}] Insight Prompt Sent`);
       const completion = await groq.chat.completions.create({
         messages: [
           { role: 'system', content: "You are an AI data analyst. Answer questions based on the provided schema." },
@@ -102,11 +120,17 @@ app.post('/plan', async (req, res) => {
         model: 'llama-3.3-70b-versatile',
         temperature: 0.1,
       });
-      return res.json({ success: true, answer: completion.choices[0].message.content, plan: { steps: [] } });
+      const insightResponse = completion.choices[0].message.content;
+      console.log(`[${requestId}] LLM Insight RAW:`, insightResponse);
+      return res.json({ success: true, answer: insightResponse, plan: { steps: [] } });
     }
 
     // STEP 4: Planning with Structured Skills
-    const skillSection = getSkillsForIntent(intent);
+    // Insight effectively uses formula skills to extract real data
+    const effectiveIntent = (intent === 'insight' || intent === 'formula') ? 'formula' : intent;
+    const skillSection = getSkillsForIntent(effectiveIntent);
+
+    console.log(`[${requestId}] Planning Prompt Sent for intent: ${intent}`);
     const planCompletion = await groq.chat.completions.create({
       messages: [
         { role: 'system', content: PLANNING_PROMPT.replace('{{SKILLS_JSON}}', JSON.stringify(skillSection)) },
@@ -116,70 +140,82 @@ app.post('/plan', async (req, res) => {
       temperature: 0,
       response_format: { type: 'json_object' }
     });
+    
+    const rawPlanContent = planCompletion.choices[0].message.content;
+    const rawPlan = JSON.parse(rawPlanContent); 
+    console.log(`[${requestId}] LLM Plan RAW:`, rawPlanContent);
+    console.log(`[${requestId}] Parsed plan:`, rawPlan);
 
-    const rawPlan = JSON.parse(planCompletion.choices[0].message.content);
-    console.log(`[${requestId}] Raw plan from LLM:`, rawPlan);
-
-    // STEP 5 & 6 & 7: Deterministic Building & Dispatching
+    // STEP 5 & 6 & 7: Deterministic Building & Dispatching 
     const steps = [];
     let summary = "";
 
     try {
-      if (intent === 'formula') {
-        const pattern = rawPlan.pattern;
-        const patternDef = allSkills.formula.patterns[pattern];
-        
-        if (!patternDef) {
-          throw new Error(`Unsupported formula pattern: ${pattern}`);
+      if (intent === 'formula' || intent === 'insight') {
+        const calcs = rawPlan.calculations || [];
+        if (!Array.isArray(calcs) && rawPlan.pattern) {
+          // Compatibility for single pattern if AI misses array
+          calcs.push({ pattern: rawPlan.pattern, parameters: rawPlan.parameters });
         }
 
-        // Validate required params
-        const missingParams = patternDef.required_params.filter(p => rawPlan.parameters[p] === undefined);
-        if (missingParams.length > 0) {
-          throw new Error(`Missing required parameters for ${pattern}: ${missingParams.join(', ')}`);
-        }
+        calcs.forEach((calc, idx) => {
+          const pattern = calc.pattern;
+          const patternDef = allSkills.formula.patterns[pattern];
+          
+          if (!patternDef) {
+            console.warn(`[${requestId}] Unsupported formula pattern: ${pattern}`);
+            return;
+          }
 
-        const builderName = patternDef.builder;
-        
-        // AUTO-RESOLVE COLUMNS in parameters
-        const resolvedParams = { ...rawPlan.parameters };
-        const headers = sheetSchema?.headers || [];
-        
-        if (resolvedParams.column) resolvedParams.column = resolveColumn(resolvedParams.column, headers);
-        if (resolvedParams.sum_column) resolvedParams.sum_column = resolveColumn(resolvedParams.sum_column, headers);
-        if (resolvedParams.criteria_column) resolvedParams.criteria_column = resolveColumn(resolvedParams.criteria_column, headers);
-        if (resolvedParams.criteria && Array.isArray(resolvedParams.criteria)) {
-          resolvedParams.criteria = resolvedParams.criteria.map(c => ({
-            ...c,
-            column: resolveColumn(c.column, headers)
-          }));
-        }
+          // Validate required params
+          const missingParams = patternDef.required_params.filter(p => calc.parameters[p] === undefined);
+          if (missingParams.length > 0) {
+            console.warn(`[${requestId}] Missing params for ${pattern}: ${missingParams.join(', ')}`);
+            return;
+          }
 
-        const formula = builders[builderName](resolvedParams);
-        const finalFormula = wrapFormula(formula, allSkills.formula.rules);
-        
-        if (patternDef.type === 'aggregate') {
-          steps.push({
-            stepNumber: 1,
-            action: 'QUERY_VALUE',
-            description: `Querying ${pattern}`,
-            params: {
-              formula: finalFormula
-            }
-          });
-          summary = `Calculating ${pattern}...`;
-        } else {
-          steps.push({
-            stepNumber: 1,
-            action: 'ADD_COLUMN',
-            description: `Calculating ${pattern}`,
-            params: {
-              columnName: rawPlan.parameters.column_name || pattern,
-              formula: finalFormula
-            }
-          });
-          summary = `Adding a ${pattern} calculation column.`;
-        }
+          const builderName = patternDef.builder;
+          
+          // AUTO-RESOLVE COLUMNS in parameters
+          const resolvedParams = { ...calc.parameters };
+          const headers = sheetSchema?.headers || [];
+          
+          if (resolvedParams.column) resolvedParams.column = resolveColumn(resolvedParams.column, headers);
+          if (resolvedParams.sum_column) resolvedParams.sum_column = resolveColumn(resolvedParams.sum_column, headers);
+          if (resolvedParams.criteria_column) resolvedParams.criteria_column = resolveColumn(resolvedParams.criteria_column, headers);
+          if (resolvedParams.criteria && Array.isArray(resolvedParams.criteria)) {
+            resolvedParams.criteria = resolvedParams.criteria.map(c => ({
+              ...c,
+              column: resolveColumn(c.column || c.criteria_column, headers)
+            }));
+          }
+
+          const formula = builders[builderName](resolvedParams);
+          const finalFormula = wrapFormula(formula, allSkills.formula.rules);
+          
+          if (patternDef.type === 'aggregate') {
+            steps.push({
+              stepNumber: idx + 1,
+              action: 'QUERY_VALUE',
+              description: `Querying ${pattern}`,
+              params: {
+                formula: finalFormula
+              }
+            });
+          } else {
+            steps.push({
+              stepNumber: idx + 1,
+              action: 'ADD_COLUMN',
+              description: `Calculating ${pattern}`,
+              params: {
+                columnName: calc.parameters.column_name || pattern,
+                formula: finalFormula
+              }
+            });
+          }
+        });
+
+        summary = intent === 'formula' ? "Performing calculations." : "Analyzing data with queries.";
       } else if (intent === 'chart') {
         // CHART DECISION ENGINE
         const chartGoal = rawPlan.chart_goal;
