@@ -40,6 +40,22 @@
                 ],
                 "builder": "buildCount"
             },
+            "count_if": {
+                "type": "aggregate",
+                "required_params": [
+                    "criteria_column",
+                    "operator",
+                    "value"
+                ],
+                "builder": "buildCountIf"
+            },
+            "count_ifs": {
+                "type": "aggregate",
+                "required_params": [
+                    "criteria"
+                ],
+                "builder": "buildCountIfs"
+            },
             "percent_growth": {
                 "type": "row_wise",
                 "required_params": [
