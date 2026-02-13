@@ -33,14 +33,19 @@ Return JSON only:
   "confidence": number
 }`;
 
-const PLANNING_PROMPT = `You are a spreadsheet action planner.
+const PLANNING_PROMPT = `You are a high-level spreadsheet action planner for a premium analytical tool.
 Return valid JSON only.
 Select supported patterns from the provided skills JSON.
 
-## IMPORTANT RULES:
+## CORE PRINCIPLES:
+1. DATASET AGNOSTIC: Rely strictly on the provided "Schema" and "Headers" for column mapping. Your plan must be robust enough to work on 1,000s of rows based on the patterns identified in the sample data and schema.
+2. ACCURACY: If the user asks for a count with a condition (e.g., "how many orders in X"), use "count_if" or "count_ifs". Do NOT use simple "count" if a filter is implied.
+3. PROFESSIONALISM: Your "label" for each calculation must be clear and context-rich (e.g., "Total Orders for Festival Event" instead of just "Count").
+
+## STRUCTURAL RULES:
 1. Do NOT generate raw formulas.
 2. Do NOT generate full chart configuration.
-3. For ALL column parameters (e.g., "column", "sum_column", "criteria_column", "x_column", "y_columns"), you MUST use the COLUMN LETTER (e.g., "A", "B", "C") from the provided schema, NOT the header name.
+3. For ALL column parameters, you MUST use the COLUMN LETTER (e.g., "A", "B", "C") from the provided schema.
 4. Only return a structured plan.
 
 Current Skills:
@@ -50,16 +55,16 @@ If intent = formula or insight:
 Return: { 
   "conversational_answer": string, 
   "calculations": [
-    { "pattern": "sum_if" | "average" | "count" | etc, "parameters": {} }
+    { "pattern": string, "parameters": {}, "label": string }
   ]
 }
-## NOTE: For "OR" conditions (e.g., "Category is Fashion OR Footwear"), generate MULTIPLE "sum_if" patterns in the calculations array instead of one "sum_ifs". "sum_ifs" is for "AND" logic.
+## NOTE: For "OR" conditions (e.g., "Category is Fashion OR Footwear"), generate MULTIPLE calculation items in the array. 
 
 If intent = chart:
 Return: { "conversational_answer": string, "chart_goal": string, "explicit_chart_type": string | null, "x_column": string, "y_columns": [] }
 
 If intent = clean_data:
-Return: { "conversational_answer": string, "operations": [ { "operation": "filter_data" | "trim_whitespace" | "convert_to_number", "column": string, "operator"?: "equals" | "not_equals" | "contains" | "not_contains" | "greater" | "less" | "empty" | "not_empty", "value"?: any, "description": "For filter_data, the condition defines which rows to KEEP." } ] }
+Return: { "conversational_answer": string, "operations": [ { "operation": "filter_data" | "trim_whitespace" | "convert_to_number", "column": string, "operator"?: string, "value"?: any, "description": string } ] }
 
 If intent = organization:
 Return: { "conversational_answer": string, "operations": [ { "operation": "sort_data" | "format_cells", "column"?: string, "order"?: string, "range"?: string, "format"?: string } ] }`;
@@ -197,9 +202,10 @@ app.post('/plan', async (req, res) => {
             steps.push({
               stepNumber: idx + 1,
               action: 'QUERY_VALUE',
-              description: `Querying ${pattern}`,
+              description: calc.label || `Querying ${pattern}`,
               params: {
-                formula: finalFormula
+                formula: finalFormula,
+                label: calc.label || pattern
               }
             });
           } else {
