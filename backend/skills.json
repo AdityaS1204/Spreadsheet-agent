@@ -33,6 +33,24 @@
                 ],
                 "builder": "buildAverage"
             },
+            "average_if": {
+                "type": "aggregate",
+                "required_params": [
+                    "average_column",
+                    "criteria_column",
+                    "operator",
+                    "value"
+                ],
+                "builder": "buildAverageIf"
+            },
+            "average_ifs": {
+                "type": "aggregate",
+                "required_params": [
+                    "average_column",
+                    "criteria"
+                ],
+                "builder": "buildAverageIfs"
+            },
             "count": {
                 "type": "aggregate",
                 "required_params": [
