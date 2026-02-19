@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <base target="_top">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -30,13 +31,16 @@
     #response-container::-webkit-scrollbar {
       width: 6px;
     }
+
     #response-container::-webkit-scrollbar-track {
       background: transparent;
     }
+
     #response-container::-webkit-scrollbar-thumb {
       background: #e0e0e0;
       border-radius: 10px;
     }
+
     #response-container::-webkit-scrollbar-thumb:hover {
       background: #d0d0d0;
     }
@@ -69,12 +73,12 @@
       padding: 10px;
       background: white;
       transition: all 0.2s ease;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
     }
 
     .input-wrapper:focus-within {
       border-color: #000;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     }
 
     textarea {
@@ -135,9 +139,18 @@
     }
 
     @keyframes rotate-square {
-      0% { transform: rotate(0deg); }
-      50% { transform: rotate(180deg); border-radius: 50%; }
-      100% { transform: rotate(360deg); }
+      0% {
+        transform: rotate(0deg);
+      }
+
+      50% {
+        transform: rotate(180deg);
+        border-radius: 50%;
+      }
+
+      100% {
+        transform: rotate(360deg);
+      }
     }
 
     /* Message Bubbles */
@@ -200,8 +213,13 @@
     }
 
     @keyframes shimmer {
-      0% { background-position: 200% 0; }
-      100% { background-position: -200% 0; }
+      0% {
+        background-position: 200% 0;
+      }
+
+      100% {
+        background-position: -200% 0;
+      }
     }
 
     /* Copy Button Below User Bubble */
@@ -226,6 +244,7 @@
     }
   </style>
 </head>
+
 <body>
   <div class="header">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -240,7 +259,8 @@
     <textarea id="prompt" placeholder="Ask AI Sheet Agent..."></textarea>
     <button id="send-btn" class="btn-send" onclick="sendPrompt()">
       <div id="btn-icon">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+          stroke-linecap="round" stroke-linejoin="round">
           <line x1="12" y1="19" x2="12" y2="5"></line>
           <polyline points="5 12 12 5 19 12"></polyline>
         </svg>
@@ -270,7 +290,7 @@
       promptInput.disabled = true;
       loader.style.display = 'block';
       btnIcon.style.display = 'none';
-      
+
       // Append User Message Container
       const wrapperDiv = document.createElement('div');
       wrapperDiv.className = 'user-msg-wrapper';
@@ -284,7 +304,7 @@
       userDiv.className = 'message user-msg';
       userDiv.style.maxWidth = '100%'; // let wrapper constrain width
       userDiv.textContent = prompt;
-      
+
       wrapperDiv.appendChild(userDiv);
 
       const copyBtn = document.createElement('button');
@@ -293,25 +313,25 @@
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
           <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-        </svg> Copy
+        </svg>
       `;
       copyBtn.onclick = (e) => {
         navigator.clipboard.writeText(prompt);
         copyBtn.innerHTML = `
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
              <polyline points="20 6 9 17 4 12"></polyline>
-          </svg> Copied
+          </svg>
         `;
         setTimeout(() => {
           copyBtn.innerHTML = `
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
               <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-            </svg> Copy
+            </svg>
           `;
         }, 1500);
       };
-      
+
       wrapperDiv.appendChild(copyBtn);
       container.appendChild(wrapperDiv);
       container.scrollTop = container.scrollHeight;
@@ -323,11 +343,50 @@
       google.script.run
         .withSuccessHandler((response) => {
           removeThinkingSteps(thinkingId);
+
+          const aiWrapper = document.createElement('div');
+          aiWrapper.className = 'ai-msg-wrapper';
+          aiWrapper.style.alignSelf = 'flex-start';
+          aiWrapper.style.display = 'flex';
+          aiWrapper.style.flexDirection = 'column';
+          aiWrapper.style.alignItems = 'flex-start';
+          aiWrapper.style.maxWidth = '85%';
+
           const aiDiv = document.createElement('div');
           aiDiv.className = response.status === 'success' ? 'message ai-msg' : 'message error-msg';
           aiDiv.innerText = response.message;
-          container.appendChild(aiDiv);
-          
+          aiDiv.style.maxWidth = '100%';
+          aiWrapper.appendChild(aiDiv);
+
+          // Add Copy Button for AI response
+          const aiCopyBtn = document.createElement('button');
+          aiCopyBtn.className = 'copy-btn-below';
+          aiCopyBtn.innerHTML = `
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+          `;
+          aiCopyBtn.onclick = () => {
+            navigator.clipboard.writeText(response.message);
+            aiCopyBtn.innerHTML = `
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                 <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            `;
+            setTimeout(() => {
+              aiCopyBtn.innerHTML = `
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              `;
+            }, 1500);
+          };
+
+          aiWrapper.appendChild(aiCopyBtn);
+          container.appendChild(aiWrapper);
+
           resetUI();
         })
         .withFailureHandler((err) => {
@@ -336,7 +395,7 @@
           errDiv.className = 'message error-msg';
           errDiv.textContent = 'Error: ' + err.message;
           container.appendChild(errDiv);
-          
+
           resetUI();
         })
         .processQuery(prompt);
@@ -349,12 +408,12 @@
       thinkingContainer.className = 'thinking-container';
       const id = 'thinking-' + Date.now();
       thinkingContainer.id = id;
-      
+
       const stepEl = document.createElement('div');
       stepEl.className = 'thinking-step shimmer';
       stepEl.innerText = 'Analyzing your query';
       thinkingContainer.appendChild(stepEl);
-      
+
       container.appendChild(thinkingContainer);
       container.scrollTop = container.scrollHeight;
 
@@ -367,7 +426,7 @@
         'Executing spreadsheet actions',
         'Applying changes to sheet'
       ];
-      
+
       let currentStep = 0;
       const interval = setInterval(() => {
         if (currentStep < steps.length - 1) {
@@ -406,7 +465,7 @@
     }
 
     // Allow Enter key to send (Shift+Enter for newline)
-    document.getElementById('prompt').addEventListener('keydown', function(e) {
+    document.getElementById('prompt').addEventListener('keydown', function (e) {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         sendPrompt();
@@ -416,7 +475,7 @@
     // Auto-focus prompt on load and check account
     window.onload = () => {
       document.getElementById('prompt').focus();
-      
+
       // Check/Create User Account
       google.script.run
         .withSuccessHandler((user) => {
@@ -430,4 +489,5 @@
     };
   </script>
 </body>
+
 </html>
