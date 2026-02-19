@@ -89,7 +89,7 @@ function resolveColumn(identifier, headers) {
 app.post('/plan', async (req, res) => {
   const requestId = Date.now();
   console.log(`[${requestId}] POST /plan received`);
-  
+
   try {
     const { prompt, sheetSchema } = req.body;
     if (!prompt) return res.status(400).json({ success: false, error: 'Prompt is required' });
@@ -102,7 +102,7 @@ app.post('/plan', async (req, res) => {
       temperature: 0,
       response_format: { type: 'json_object' }
     });
-    
+
     const rawClassificationContent = classification.choices[0].message.content;
     const intentResult = JSON.parse(rawClassificationContent);
     console.log(`[${requestId}] LLM Classification RAW:`, rawClassificationContent);
@@ -145,9 +145,9 @@ app.post('/plan', async (req, res) => {
       temperature: 0,
       response_format: { type: 'json_object' }
     });
-    
+
     const rawPlanContent = planCompletion.choices[0].message.content;
-    const rawPlan = JSON.parse(rawPlanContent); 
+    const rawPlan = JSON.parse(rawPlanContent);
     console.log(`[${requestId}] LLM Plan RAW:`, rawPlanContent);
     console.log(`[${requestId}] Parsed plan:`, rawPlan);
 
@@ -166,7 +166,7 @@ app.post('/plan', async (req, res) => {
         calcs.forEach((calc, idx) => {
           const pattern = calc.pattern;
           const patternDef = allSkills.formula.patterns[pattern];
-          
+
           if (!patternDef) {
             console.warn(`[${requestId}] Unsupported formula pattern: ${pattern}`);
             return;
@@ -180,14 +180,29 @@ app.post('/plan', async (req, res) => {
           }
 
           const builderName = patternDef.builder;
-          
+
           // AUTO-RESOLVE COLUMNS in parameters
           const resolvedParams = { ...calc.parameters };
           const headers = sheetSchema?.headers || [];
-          
+
+          // NORMALIZE CRITERIA: If AI sends an object like {"A": "Val"}, convert to array [{column: "A", value: "Val", operator: "equals"}]
+          if (resolvedParams.criteria && !Array.isArray(resolvedParams.criteria) && typeof resolvedParams.criteria === 'object') {
+            const normalized = [];
+            for (const [key, val] of Object.entries(resolvedParams.criteria)) {
+              normalized.push({
+                column: key,
+                value: val,
+                operator: 'equals'
+              });
+            }
+            resolvedParams.criteria = normalized;
+          }
+
           if (resolvedParams.column) resolvedParams.column = resolveColumn(resolvedParams.column, headers);
           if (resolvedParams.sum_column) resolvedParams.sum_column = resolveColumn(resolvedParams.sum_column, headers);
+          if (resolvedParams.average_column) resolvedParams.average_column = resolveColumn(resolvedParams.average_column, headers);
           if (resolvedParams.criteria_column) resolvedParams.criteria_column = resolveColumn(resolvedParams.criteria_column, headers);
+
           if (resolvedParams.criteria && Array.isArray(resolvedParams.criteria)) {
             resolvedParams.criteria = resolvedParams.criteria.map(c => ({
               ...c,
@@ -197,7 +212,7 @@ app.post('/plan', async (req, res) => {
 
           const formula = builders[builderName](resolvedParams);
           const finalFormula = wrapFormula(formula, allSkills.formula.rules);
-          
+
           if (patternDef.type === 'aggregate') {
             steps.push({
               stepNumber: idx + 1,
@@ -226,17 +241,17 @@ app.post('/plan', async (req, res) => {
         // CHART DECISION ENGINE
         const chartGoal = rawPlan.chart_goal;
         let chartType = intentResult.explicit_chart_type || rawPlan.explicit_chart_type;
-        
+
         if (!chartType && allSkills.chart.goals[chartGoal]) {
           chartType = allSkills.chart.goals[chartGoal].default_type;
         }
-        
+
         chartType = (chartType || 'column').toLowerCase();
 
         // RESOLVE CHART COLUMNS
         const headers = sheetSchema?.headers || [];
         const resolvedX = resolveColumn(rawPlan.x_column, headers);
-        const resolvedY = Array.isArray(rawPlan.y_columns) 
+        const resolvedY = Array.isArray(rawPlan.y_columns)
           ? rawPlan.y_columns.map(col => resolveColumn(col, headers))
           : [];
 
@@ -279,7 +294,7 @@ app.post('/plan', async (req, res) => {
 
           const stepAction = opName === 'filter_data' ? 'FILTER_DATA' : 'CLEAN_DATA';
           const headers = sheetSchema?.headers || [];
-          
+
           // Handle both flat and nested structure
           const params = op.parameters || op;
           const resolvedCol = resolveColumn(params.column, headers);
